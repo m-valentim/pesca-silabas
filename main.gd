@@ -388,7 +388,7 @@ func construir_cenario_e_ui():
 	fundo_floresta.texture = load("res://imagens/fundo_floresta.png")
 	add_child(fundo_floresta)
 	
-	lbl_titulo = Label.new(); lbl_titulo.text = "PESCA-PALAVRAS"; lbl_titulo.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	lbl_titulo = Label.new(); lbl_titulo.text = "PESCA-SÍLABAS"; lbl_titulo.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	lbl_titulo.add_theme_font_size_override("font_size", 50); lbl_titulo.add_theme_color_override("font_color", Color(1, 1, 0)); lbl_titulo.add_theme_color_override("font_outline_color", Color(0, 0, 0)); lbl_titulo.add_theme_constant_override("outline_size", 10) 
 	lbl_titulo.position = Vector2(tela_tamanho.x - 480, 20); lbl_titulo.size = Vector2(450, 60)
 	if fonte_jogo.base_font: lbl_titulo.add_theme_font_override("font", fonte_jogo)
