@@ -1,0 +1,14 @@
+# Godot 4+ specific ignores
+.godot/
+/android/
+*.translation
+export_presets.cfg
+
+# Arquivos temporários
+*.tmp
+*.uid
+*.import
+
+# Arquivos de sistema operacional
+.DS_Store
+Thumbs.db
