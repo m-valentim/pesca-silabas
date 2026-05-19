@@ -13,28 +13,11 @@ var distancia_entre_silabas = 470.0
 var fonte_jogo = FontVariation.new()
 
 # ---------------------------------------------------------
-# VARIÁVEIS DA API E MODO OFFLINE (FALLBACK)
+# DICIONÁRIO LOCAL E CONFIGURAÇÃO SÍLABAS
 # ---------------------------------------------------------
-var usar_api = true 
-
-var JsonRequest = HTTPRequest.new()
-var ImagemRequest = HTTPRequest.new()
-var AudioRequest = HTTPRequest.new()
-
-var array_dicionario_json: Array
-var array_dicionario_imagens: Array
-var texturas_temp: Array
-var audio_temp
-
-var index_api = 0
-var cont_img_api = 0
-var api_carregada = false
-
-var array_api_dados = [] 
 var todas_silabas = ["A", "BA", "CA", "DA", "FA", "GA", "JA", "LA", "MA", "NA", "PA", "QUA", "RA", "SA", "TA", "VA", "XA", "ZA"]
 var palavras_disponiveis = [] 
 
-# Dicionário Local (Para quando a API falhar)
 var dicionario_local = {
 	"aviao": ["A", "VIÃO"], "banana": ["BA", "NANA"], "cachorro": ["CA", "CHORRO"],
 	"dado": ["DA", "DO"], "faca": ["FA", "CA"], "gato": ["GA", "TO"],
@@ -45,7 +28,7 @@ var dicionario_local = {
 }
 
 # ---------------------------------------------------------
-# VARIÁVEIS DO JOGO E VÍDEO
+# VARIÁVEIS DO JOGO
 # ---------------------------------------------------------
 var palavra_atual = ""
 var silaba_alvo = ""
@@ -55,7 +38,6 @@ var silabas_em_cena = []
 
 var padrao_spawn = [false, false, true, false, true]
 var contador_spawn = 0
-var video_terminou = false # <--- Controle à prova de falhas do Godot
 
 # Referências UI
 var fundo_floresta: TextureRect
@@ -108,121 +90,6 @@ func _ready():
 	add_child(timer_spawn)
 	
 	iniciar_intro_video()
-	iniciar_download_api()
-
-# ---------------------------------------------------------
-# SISTEMA DE DOWNLOAD DA API E MODO OFFLINE
-# ---------------------------------------------------------
-func iniciar_download_api():
-	# Tempo limite exigido de 5 segundos
-	JsonRequest.timeout = 5.0
-	ImagemRequest.timeout = 5.0
-	AudioRequest.timeout = 5.0
-	
-	add_child(JsonRequest)
-	add_child(ImagemRequest)
-	add_child(AudioRequest)
-	
-	JsonRequest.request_completed.connect(_on_json_request_completed)
-	ImagemRequest.request_completed.connect(_on_imagem_request_completed)
-	AudioRequest.request_completed.connect(_on_audio_request_completed)
-	
-	var url = "http://localhost:8080/api/recursos/silabas?vogal=A&limite=18&tipoColorir=NAO_COLORIR&quantImagens=1"
-	var headers = ["Content-Type: application/json"]
-	JsonRequest.request(url, headers, HTTPClient.METHOD_GET)
-
-func ativar_modo_offline():
-	print("⚠️ API não conectou ou falhou. Entrando no modo Offline (Local)!")
-	usar_api = false
-	api_carregada = true
-	palavras_disponiveis.clear()
-	_verificar_liberacao_jogo()
-
-func _on_json_request_completed(_result: int, _response_code: int, _headers: PackedStringArray, body: PackedByteArray) -> void:
-	if _result != HTTPRequest.RESULT_SUCCESS or _response_code != 200:
-		ativar_modo_offline()
-		return
-		
-	var json_string = body.get_string_from_utf8()
-	var json = JSON.parse_string(json_string)
-	
-	if json != null:
-		array_dicionario_json = json
-		if array_api_dados.size() == 0: todas_silabas.clear()
-		request_imagem()
-	else:
-		ativar_modo_offline()
-
-func request_imagem():
-	if not usar_api: return
-	if index_api >= array_dicionario_json.size():
-		finalizar_download_api()
-		return
-		
-	array_dicionario_imagens = array_dicionario_json[index_api].imagens
-	if cont_img_api < array_dicionario_imagens.size():
-		ImagemRequest.request(array_dicionario_imagens[cont_img_api].imagem)
-	else:
-		AudioRequest.request(array_dicionario_json[index_api].som)
-
-func _on_imagem_request_completed(_result: int, _response_code: int, _headers: PackedStringArray, body: PackedByteArray) -> void:
-	if not usar_api: return
-	if _result != HTTPRequest.RESULT_SUCCESS or _response_code != 200:
-		ativar_modo_offline()
-		return
-		
-	var image = Image.new()
-	var err = image.load_png_from_buffer(body)
-	if err == OK:
-		var texture = ImageTexture.create_from_image(image)
-		texturas_temp.append(texture)
-	
-	cont_img_api += 1
-	if cont_img_api < array_dicionario_imagens.size():
-		request_imagem()
-	else:
-		AudioRequest.request(array_dicionario_json[index_api].som)
-
-func _on_audio_request_completed(_result: int, _response_code: int, _headers: PackedStringArray, body: PackedByteArray) -> void:
-	if not usar_api: return
-	if _result != HTTPRequest.RESULT_SUCCESS or _response_code != 200:
-		ativar_modo_offline()
-		return
-		
-	audio_temp = AudioStreamOggVorbis.load_from_buffer(body)
-	salvar_dados_no_array()
-
-func salvar_dados_no_array() -> void:
-	var dicionario_item = {
-		"palavra": array_dicionario_json[index_api].palavra,
-		"silaba": array_dicionario_json[index_api].silaba,
-		"complemento_silaba": array_dicionario_json[index_api].complemento_silaba,
-		"imagens": texturas_temp.duplicate(),
-		"som": audio_temp
-	}
-	array_api_dados.append(dicionario_item)
-	
-	if not todas_silabas.has(dicionario_item.silaba):
-		todas_silabas.append(dicionario_item.silaba)
-	
-	index_api += 1
-	cont_img_api = 0
-	texturas_temp.clear()
-	request_imagem() 
-
-func finalizar_download_api():
-	api_carregada = true
-	_verificar_liberacao_jogo()
-
-func _verificar_liberacao_jogo():
-	if video_terminou:
-		if api_carregada:
-			lbl_palavra_alvo.hide()
-			btn_iniciar.show()
-		else:
-			lbl_palavra_alvo.text = "BUSCANDO DADOS..."
-			lbl_palavra_alvo.position = Vector2(0, (tela_tamanho.y / 2) - 80)
-			lbl_palavra_alvo.show()
 
 # ---------------------------------------------------------
 # SISTEMA DE ÁUDIO
@@ -257,13 +124,6 @@ func tocar_sfx(nome_arquivo: String, volume_ajuste: float = 0.0):
 		audio_sfx.play()
 
 func tocar_som_silaba(silaba_texto: String):
-	if usar_api:
-		for item in array_api_dados:
-			if item.silaba == silaba_texto and item.som != null:
-				audio_silaba.stream = item.som
-				audio_silaba.play()
-				return
-	
 	var caminho_base = "res://audios/" + silaba_texto.to_lower()
 	var stream_audio = _carregar_audio_inteligente(caminho_base)
 	if stream_audio:
@@ -306,14 +166,13 @@ func iniciar_intro_video():
 		_on_video_intro_finished()
 
 func _on_video_intro_finished():
-	video_terminou = true 
-	
 	if has_node("CamadaVideo"):
 		var cv = get_node("CamadaVideo")
 		cv.queue_free()
 	
 	if audio_bgm.stream: audio_bgm.play()
-	_verificar_liberacao_jogo()
+	lbl_palavra_alvo.hide()
+	btn_iniciar.show()
 
 # ---------------------------------------------------------
 # CONSTRUÇÃO DA INTERFACE
@@ -480,58 +339,32 @@ func sortear_nova_palavra():
 	silabas_coletadas.clear()
 	contador_spawn = 0 
 	
-	if usar_api:
-		if palavras_disponiveis.size() == 0:
-			palavras_disponiveis = range(array_api_dados.size())
-			palavras_disponiveis.shuffle() 
-			
-		var indice_sorteado = palavras_disponiveis.pop_front()
-		var item = array_api_dados[indice_sorteado]
+	if palavras_disponiveis.size() == 0:
+		palavras_disponiveis = dicionario_local.keys().duplicate()
+		palavras_disponiveis.shuffle()
 		
-		palavra_atual = item.palavra
-		silaba_alvo = item.silaba
-		restante_palavra = item.complemento_silaba
-		
-		if item.imagens.size() > 0:
-			img_palavra_alvo.texture = item.imagens[0]
-			img_palavra_alvo.show()
-	else:
-		if palavras_disponiveis.size() == 0:
-			palavras_disponiveis = dicionario_local.keys().duplicate()
-			palavras_disponiveis.shuffle()
-			
-		palavra_atual = palavras_disponiveis.pop_front()
-		silaba_alvo = dicionario_local[palavra_atual][0]
-		restante_palavra = dicionario_local[palavra_atual][1]
-		
-		var carregou = false
-		var extensoes = [".png", ".jpg", ".jpeg"]
-		for ext in extensoes:
-			var path = "res://imagens/" + palavra_atual + ext
-			if ResourceLoader.exists(path):
-				img_palavra_alvo.texture = load(path)
-				carregou = true
-				break
-		
-		if not carregou: print("AVISO: Imagem local não encontrada para: " + palavra_atual)
-		img_palavra_alvo.show()
+	palavra_atual = palavras_disponiveis.pop_front()
+	silaba_alvo = dicionario_local[palavra_atual][0]
+	restante_palavra = dicionario_local[palavra_atual][1]
 	
+	var carregou = false
+	var extensoes = [".png", ".jpg", ".jpeg"]
+	for ext in extensoes:
+		var path = "res://imagens/" + palavra_atual + ext
+		if ResourceLoader.exists(path):
+			img_palavra_alvo.texture = load(path)
+			carregou = true
+			break
+	
+	if not carregou: print("AVISO: Imagem local não encontrada para: " + palavra_atual)
+	img_palavra_alvo.show()
 	atualizar_textos()
 
 func atualizar_textos():
 	if silabas_coletadas.size() == 0:
-		if usar_api:
-			var regex = RegEx.new()
-			regex.compile("(_\\s*)+")
-			var texto_oculto = regex.sub(restante_palavra, "[ _ ]")
-			lbl_palavra_formada.text = texto_oculto
-		else:
-			lbl_palavra_formada.text = "[ _ ] " + restante_palavra
+		lbl_palavra_formada.text = "[ _ ] " + restante_palavra
 	else:
-		if usar_api:
-			lbl_palavra_formada.text = palavra_atual 
-		else:
-			lbl_palavra_formada.text = silaba_alvo + restante_palavra 
+		lbl_palavra_formada.text = silaba_alvo + restante_palavra 
 
 func atualizar_coracoes():
 	for i in range(coracoes.size()): coracoes[i].visible = i < vidas
